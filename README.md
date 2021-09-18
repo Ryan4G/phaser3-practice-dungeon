@@ -1,2 +1,2 @@
-# phaser3-practice-dungeon
-A game of dungeon practice using phaser3  with typerscript.
+# phaser3-gamepad-template
+phaser3 gamepad template for using typescript
