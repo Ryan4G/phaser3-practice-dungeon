@@ -1,6 +1,9 @@
 import Phaser from "phaser";
+import { sceneEvents } from "../events/EventCollection";
+import { EVENT_WARRIOR_OPEN_CHEST } from "../symbols/GameSymbols";
 
-import {Direction, HealthState} from '../enums/gameEnums';
+import {Direction, HealthState} from '../enums/GameEnums';
+import Chest from "./Chest";
 
 declare global{
     namespace Phaser.GameObjects{
@@ -27,8 +30,9 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
     private healthPointGemos?: Array<Phaser.Geom.Rectangle>;
     private _weaponInHand?: Phaser.Physics.Arcade.Sprite;
     private currDirection: Direction = Direction.DOWN;
-    private _weaponAttact: Boolean = false;
-
+    private _weaponAttact: boolean = false;
+    private _activeChest?: Chest;
+    private _conis: number = 0;
     /**
      * 
      * @param scene The Scene to which this Game Object belongs. A Game Object can only belong to one Scene at a time.
@@ -54,6 +58,7 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
         if (!this._weaponInHand){
             this._weaponInHand = this.parentScene.physics.add.sprite(this.x, this.y, 'weapon', 'Sword_Down_0.png');
             this._weaponInHand.body.setSize(this.body.width, this.body.height);
+            this._weaponInHand.body.debugBodyColor = 0x00ff00;
         }
         
         return this._weaponInHand;
@@ -67,6 +72,10 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
         return this._weaponAttact;
     }
 
+    get activeChest(){
+        return this._activeChest;
+    }
+    
     preUpdate(time: number, delta: number){
         super.preUpdate(time, delta);
         
@@ -81,8 +90,24 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
         }
 
         let speed = 100;
-        
-        if (cursor.up.isDown){
+
+        const spaceDown = Phaser.Input.Keyboard.JustDown(cursor.space);
+
+        if (spaceDown){
+            if (this._activeChest){
+                let coins = this._activeChest.coins;
+
+                if (coins > 0){
+                    this._conis += coins;
+                    sceneEvents.emit(EVENT_WARRIOR_OPEN_CHEST, this._conis);
+                    this._activeChest = undefined;
+                }
+            }
+            else{
+                this.setWeaponAttact(true);
+            }
+        }
+        else if (cursor.up.isDown){
             this.currDirection = Direction.UP;
             
             this.play('warrior-run-up', true);
@@ -120,6 +145,11 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
 
             this.setVelocity(0, 0);
         }
+
+        // if (this._activeChest && (cursor.left.isDown || cursor.right.isDown ||
+        //     cursor.up.isDown || cursor.down.isDown)){
+        //         this._activeChest = undefined;
+        // }
     }
 
     handleCollisionDamage(vetor: Phaser.Math.Vector2){
@@ -127,11 +157,12 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
             return;
         }
 
+        this.parentScene.sound.play('warrior_hurt');
+
         this._healthPoints -= 20;
 
         if (this._healthPoints <= 0){
             this.healthState = HealthState.DEAD;
-            this.setVelocity(0, 0);
         }
         else{   
             this.healthState = HealthState.DAMAGE;
@@ -148,8 +179,9 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
             }
             else{
                 this.healthPointGraphic?.setVisible(false);
-                this.setActive(false);
                 this.setVelocity(0, 0);
+                this._weaponInHand!.setVelocity(0, 0);
+                this.setActive(false);
             }
         });
     }
@@ -161,15 +193,18 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
             return;
         }
 
+        this.parentScene.sound.play('sword_out');
+        this._weaponInHand!.setVelocity(0, 0);
+  
         let bodySetting = {
             offset : {
-                x: 24,
-                y: 24,
+                x: 25,
+                y: 25,
                 distanceX: 10,
                 distanceY: 10
             },
-            width: this.body.width,
-            height: this.body.height,
+            width: this.body.width - 2,
+            height: this.body.height - 2,
         };
 
         if (val){
@@ -233,6 +268,10 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
         });
     }
 
+    setActiveChest(chest: Chest){
+        this._activeChest = chest;
+    }
+    
     private updateHealthPoints(){
         if (!this.body || (this.healthPointGraphic && !this.healthPointGraphic.visible)){
             return;
@@ -290,13 +329,13 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
 
         let bodySetting = {
             offset : {
-                x: 24,
-                y: 24,
+                x: 25,
+                y: 25,
                 distanceX: 10,
                 distanceY: 10
             },
-            width: this.body.width,
-            height: this.body.height,
+            width: this.body.width - 2,
+            height: this.body.height - 2,
         };
 
         this._weaponInHand.body.setSize(bodySetting.width, bodySetting.height);

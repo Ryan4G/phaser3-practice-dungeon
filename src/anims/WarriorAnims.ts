@@ -1,4 +1,4 @@
-const createWorriorAnims = (anims: Phaser.Animations.AnimationManager)=>{
+const createWarriorAnims = (anims: Phaser.Animations.AnimationManager)=>{
 
     anims.create({
         key : 'warrior-run-idle',
@@ -106,5 +106,5 @@ const createWorriorAnims = (anims: Phaser.Animations.AnimationManager)=>{
 };
 
 export {
-    createWorriorAnims
+    createWarriorAnims
 };

@@ -1,5 +1,5 @@
 import Phaser, { Scene } from "phaser";
-import {Direction, HealthState} from '../enums/gameEnums';
+import {Direction, HealthState} from '../enums/GameEnums';
 
 const getRandomDirection = (exclude: Direction) => {
 
@@ -27,7 +27,6 @@ export default class BigDemon extends Phaser.Physics.Arcade.Sprite{
         this.parentScene = scene;
 
         this.setScale(0.6);
-        //this.anims.play('bigDemon-idle', true);
 
         scene.physics.world.on(Phaser.Physics.Arcade.Events.TILE_COLLIDE, this.handleTileCollide, this);
 
@@ -98,6 +97,10 @@ export default class BigDemon extends Phaser.Physics.Arcade.Sprite{
 
         if (this.hitCount <= 0){
             this.healthState = HealthState.DEAD;
+            this.parentScene.sound.play('demon_death');
+        }
+        else{
+            this.parentScene.sound.play('demon_hurt');
         }
 
         this.parentScene.time.delayedCall(300, ()=>{

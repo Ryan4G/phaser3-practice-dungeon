@@ -1,12 +1,14 @@
 import Phaser, { Physics } from 'phaser';
-import { createWorriorAnims } from '../anims/worriorAnims';
-import { createBigDemonAnims } from '../anims/bigDemonAnims';
-import { createWeaponAnims } from '../anims/weaponAnimas';
+import { createWarriorAnims } from '../anims/WarriorAnims';
+import { createBigDemonAnims } from '../anims/BigDemonAnims';
+import { createWeaponAnims } from '../anims/WeaponAnims';
+import { createChestAnims } from '../anims/ChestAnims';
 import { debugLayer } from '../tools/debug';
-import BigDemon from '../sprites/bigDemon';
-import '../sprites/warrior';
-import Warrior from '../sprites/warrior';
+import BigDemon from '../sprites/BigDemon';
+import '../sprites/Warrior';
 import { sceneEvents } from '../events/EventCollection';
+import Chest from '../sprites/Chest';
+import Warrior from '../sprites/Warrior';
 
 
 export default class GameScene extends Phaser.Scene {
@@ -14,6 +16,7 @@ export default class GameScene extends Phaser.Scene {
     private cursor?: Phaser.Types.Input.Keyboard.CursorKeys;
     private warrior?:  Warrior;
     private warriorDemonCollideEvent?: Phaser.Physics.Arcade.Collider;
+    private weaponDemonCollideEvent?: Phaser.Physics.Arcade.Collider;
     constructor() {
         super('GameScene');
     }
@@ -25,9 +28,10 @@ export default class GameScene extends Phaser.Scene {
     create() {
         this.scene.run('GameUIScene');
 
-        createWorriorAnims(this.anims);
+        createWarriorAnims(this.anims);
         createBigDemonAnims(this.anims);
         createWeaponAnims(this.anims);
+        createChestAnims(this.anims);
 
         const map = this.make.tilemap({ key: 'dungeon' });
 
@@ -38,12 +42,9 @@ export default class GameScene extends Phaser.Scene {
 
         wallsLayer.setCollisionByProperty({ collide: true });
 
-       if (this.game.config.physics.arcade?.debug){
+        if (this.game.config.physics.arcade?.debug){
             debugLayer(wallsLayer, this);
         }
-
-        this.warrior = this.add.warrior(300, 180, 'charecter');
-
 
         const demonGroup = this.physics.add.group({
             classType: BigDemon,
@@ -52,24 +53,40 @@ export default class GameScene extends Phaser.Scene {
                 demon.body.onCollide = true;
                 demon.body.setSize(demon.width * 0.8, demon.height);
                 demon.body.setOffset(4, 4);
-            }
-        })
+            },
+            maxSize: 20
+        });
 
-        demonGroup.get(320, 180, 'enemy');
+        const monsters = map.getObjectLayer('Monsters');
+
+        monsters.objects.forEach(m => {
+            demonGroup.get(m.x! + m.width! * 0.5, m.y! + m.height! * 0.5, 'enemy');
+        });
+
+        const chests = map.getObjectLayer('Chests');
+        const chestGroup = this.physics.add.staticGroup({
+            classType: Chest
+        });
+
+        chests.objects.forEach(c => {
+            chestGroup.get(c.x! + c.width! * 0.5, c.y! + c.height! * 0.5, 'chest')
+        });
+
+        this.warrior = this.add.warrior(300, 180, 'charecter');
 
         this.physics.add.collider(this.warrior, wallsLayer);
         this.physics.add.collider(demonGroup, wallsLayer);
+
         this.warriorDemonCollideEvent = this.physics.add.collider(this.warrior, demonGroup, this.handleWarriorDemonsCollision, undefined, this);
-        this.physics.add.collider(this.warrior.weaponInHand!, demonGroup, this.handleWeaponDemonsCollistion, undefined, this);
+        this.weaponDemonCollideEvent = this.physics.add.collider(this.warrior.weaponInHand!, demonGroup, this.handleWeaponDemonsCollistion, undefined, this);
+
+        this.physics.add.collider(this.warrior, chestGroup, this.handleWarriorOpenChests, undefined, this);
+        this.physics.add.collider(demonGroup, chestGroup);
 
         this.cursor = this.input.keyboard.createCursorKeys();
 
         this.cameras.main.setZoom(2);
         this.cameras.main.startFollow(this.warrior);
-
-        this.input.keyboard.on('keydown-SPACE', ()=>{
-            this.warrior?.setWeaponAttact(true);
-        });
     }
 
     update() {
@@ -88,6 +105,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (theWarrior.healthPoints <= 0){
             this.warriorDemonCollideEvent?.destroy();
+            this.weaponDemonCollideEvent?.destroy();
         }
 
         // const vet2 = new Phaser.Math.Vector2(theDemon.x - theWarrior.x, theDemon.y - theWarrior.y);
@@ -106,5 +124,16 @@ export default class GameScene extends Phaser.Scene {
         const vet = new Phaser.Math.Vector2(theDemon.x - theWeapon.x, theDemon.y - theWeapon.y);
 
         theDemon.handleCollisionDamage(vet);
+    }
+
+    private handleWarriorOpenChests(warrior: Phaser.Types.Physics.Arcade.GameObjectWithBody, chest: Phaser.Types.Physics.Arcade.GameObjectWithBody):void{
+        const theChest = chest as Chest;
+        const theWarrior = warrior as Warrior;
+
+        if (theWarrior.activeChest === theChest){
+            return;
+        }
+
+        theWarrior.setActiveChest(theChest);
     }
 }
