@@ -6,19 +6,36 @@ import { createChestAnims } from '../anims/ChestAnims';
 import { debugLayer } from '../tools/debug';
 import BigDemon from '../sprites/BigDemon';
 import '../sprites/Warrior';
-import { sceneEvents } from '../events/EventCollection';
 import Chest from '../sprites/Chest';
 import Warrior from '../sprites/Warrior';
+import { getBrowserMobileMode } from '../tools/mobile';
+import { IInputPad } from '../interfaces/IInputPad';
+import { sceneEvents } from "../events/EventCollection";
+import { EVENT_WARRIOR_KIIL_MONSTER } from "../symbols/GameSymbols";
 
 
 export default class GameScene extends Phaser.Scene {
 
+    private _inputPad?: IInputPad;
     private cursor?: Phaser.Types.Input.Keyboard.CursorKeys;
     private warrior?:  Warrior;
     private warriorDemonCollideEvent?: Phaser.Physics.Arcade.Collider;
     private weaponDemonCollideEvent?: Phaser.Physics.Arcade.Collider;
+
+    private _monsterCount: number = 0;
+
+    private readonly MOBILEMODE: boolean;
+
     constructor() {
         super('GameScene');
+        this.MOBILEMODE = getBrowserMobileMode();
+        this._inputPad = {
+            left: false,
+            right: false,
+            up: false,
+            down: false,
+            space: false
+        };
     }
 
     preload() {
@@ -28,6 +45,10 @@ export default class GameScene extends Phaser.Scene {
     create() {
         this.scene.run('GameUIScene');
 
+        if (this.MOBILEMODE){
+            this.scene.run('GamePadScene');
+        }
+        
         createWarriorAnims(this.anims);
         createBigDemonAnims(this.anims);
         createWeaponAnims(this.anims);
@@ -46,7 +67,7 @@ export default class GameScene extends Phaser.Scene {
             debugLayer(wallsLayer, this);
         }
 
-        const demonGroup = this.physics.add.group({
+        const monsterGroup = this.physics.add.group({
             classType: BigDemon,
             createCallback: (it) =>{
                 let demon = it as BigDemon;
@@ -54,13 +75,21 @@ export default class GameScene extends Phaser.Scene {
                 demon.body.setSize(demon.width * 0.8, demon.height);
                 demon.body.setOffset(4, 4);
             },
+            removeCallback: ()=>{
+                sceneEvents.emit(EVENT_WARRIOR_KIIL_MONSTER, --this._monsterCount);
+
+                if (this._monsterCount <= 0){
+                    this.physics.world.pause();
+                }
+            },
             maxSize: 20
         });
 
         const monsters = map.getObjectLayer('Monsters');
 
         monsters.objects.forEach(m => {
-            demonGroup.get(m.x! + m.width! * 0.5, m.y! + m.height! * 0.5, 'enemy');
+            monsterGroup.get(m.x! + m.width! * 0.5, m.y! + m.height! * 0.5, 'enemy');
+            this._monsterCount++;
         });
 
         const chests = map.getObjectLayer('Chests');
@@ -69,19 +98,19 @@ export default class GameScene extends Phaser.Scene {
         });
 
         chests.objects.forEach(c => {
-            chestGroup.get(c.x! + c.width! * 0.5, c.y! + c.height! * 0.5, 'chest')
+            chestGroup.get(c.x! + c.width! * 0.5, c.y! + c.height! * 0.5, 'chest');
         });
 
         this.warrior = this.add.warrior(300, 180, 'charecter');
 
         this.physics.add.collider(this.warrior, wallsLayer);
-        this.physics.add.collider(demonGroup, wallsLayer);
+        this.physics.add.collider(monsterGroup, wallsLayer);
 
-        this.warriorDemonCollideEvent = this.physics.add.collider(this.warrior, demonGroup, this.handleWarriorDemonsCollision, undefined, this);
-        this.weaponDemonCollideEvent = this.physics.add.collider(this.warrior.weaponInHand!, demonGroup, this.handleWeaponDemonsCollistion, undefined, this);
+        this.warriorDemonCollideEvent = this.physics.add.collider(this.warrior, monsterGroup, this.handleWarriorDemonsCollision, undefined, this);
+        this.weaponDemonCollideEvent = this.physics.add.collider(this.warrior.weaponInHand!, monsterGroup, this.handleWeaponDemonsCollistion, undefined, this);
 
         this.physics.add.collider(this.warrior, chestGroup, this.handleWarriorOpenChests, undefined, this);
-        this.physics.add.collider(demonGroup, chestGroup);
+        this.physics.add.collider(monsterGroup, chestGroup);
 
         this.cursor = this.input.keyboard.createCursorKeys();
 
@@ -91,17 +120,32 @@ export default class GameScene extends Phaser.Scene {
 
     update() {
         if (this.warrior){
-            this.warrior.update(this.cursor);
+            if (!this.MOBILEMODE && this.cursor){
+                this._inputPad = {
+                    left: this.cursor.left.isDown,
+                    right: this.cursor.right.isDown,
+                    up: this.cursor.up.isDown,
+                    down: this.cursor.down.isDown,
+                    space: Phaser.Input.Keyboard.JustDown(this.cursor.space)
+                }
+            }
+
+            this.warrior.update(this._inputPad);
         }
     }
 
+    setInputPad(pad:IInputPad){
+        this._inputPad = pad;
+        console.dir(pad);
+    }
+    
     private handleWarriorDemonsCollision(warrior: Phaser.Types.Physics.Arcade.GameObjectWithBody, demon: Phaser.Types.Physics.Arcade.GameObjectWithBody):void{
         const theDemon = demon as BigDemon;
         const theWarrior = warrior as Warrior;
 
         const vet = new Phaser.Math.Vector2(theWarrior.x - theDemon.x, theWarrior.y - theDemon.y);
 
-        theWarrior.handleCollisionDamage(vet);
+        theWarrior.handleCollisionDamage(vet, theDemon.damageHurt);
 
         if (theWarrior.healthPoints <= 0){
             this.warriorDemonCollideEvent?.destroy();
@@ -130,7 +174,7 @@ export default class GameScene extends Phaser.Scene {
         const theChest = chest as Chest;
         const theWarrior = warrior as Warrior;
 
-        if (theWarrior.activeChest === theChest){
+        if (theChest.hasOpened || theWarrior.activeChest === theChest){
             return;
         }
 

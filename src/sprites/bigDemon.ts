@@ -13,6 +13,8 @@ const getRandomDirection = (exclude: Direction) => {
 };
 
 export default class BigDemon extends Phaser.Physics.Arcade.Sprite{
+
+    private readonly _damageHurt: number = 10;
     private currDirection: Direction = Direction.UP;
     private healthState: HealthState = HealthState.NORMAL;
     private moveEvent : Phaser.Time.TimerEvent;
@@ -39,6 +41,10 @@ export default class BigDemon extends Phaser.Physics.Arcade.Sprite{
         });
     }
 
+    get damageHurt(){
+        return this._damageHurt;
+    }
+    
     preUpdate(time: number, delta: number){
         super.preUpdate(time, delta);
 
@@ -47,7 +53,7 @@ export default class BigDemon extends Phaser.Physics.Arcade.Sprite{
             return;
         }
 
-        const speed = 50;
+        const speed = 40;
 
         this.anims.play('bigDemon-run', true);
 
@@ -69,6 +75,7 @@ export default class BigDemon extends Phaser.Physics.Arcade.Sprite{
                 break;
             }
             default:{
+                this.setVelocity(0, 0);
                 break;
             }
         }

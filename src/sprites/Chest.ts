@@ -2,7 +2,7 @@ import Phaser, { Physics } from "phaser";
 
 export default class Chest extends Phaser.Physics.Arcade.Sprite{
     private parentScene: Phaser.Scene;
-    private hasOpened: boolean = false;
+    private _hasOpened: boolean = false;
     /**
      * 
      * @param scene The Scene to which this Game Object belongs. A Game Object can only belong to one Scene at a time.
@@ -22,13 +22,17 @@ export default class Chest extends Phaser.Physics.Arcade.Sprite{
     get coins(): number{
         let conis = 0;
 
-        if (!this.hasOpened){
+        if (!this._hasOpened){
             this.parentScene.sound.play('open_chest');
             this.anims.play('chest-open');
             conis = Phaser.Math.Between(60, 300);
-            this.hasOpened = true;
+            this._hasOpened = true;
         }
 
         return conis;
+    }
+
+    get hasOpened(){
+        return this._hasOpened;
     }
 }

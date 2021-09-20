@@ -1,9 +1,10 @@
 import Phaser from "phaser";
 import { sceneEvents } from "../events/EventCollection";
-import { EVENT_WARRIOR_OPEN_CHEST } from "../symbols/GameSymbols";
+import { EVENT_WARRIOR_OPEN_CHEST, EVENT_WARRIOR_DEAD } from "../symbols/GameSymbols";
 
 import {Direction, HealthState} from '../enums/GameEnums';
 import Chest from "./Chest";
+import { IInputPad } from "~interfaces/IInputPad";
 
 declare global{
     namespace Phaser.GameObjects{
@@ -83,22 +84,21 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
         this.updateWeaponInHand();
     }
 
-    update(cursor?: Phaser.Types.Input.Keyboard.CursorKeys){
+    update(inputPad?: IInputPad){
 
-        if (!cursor || this._weaponAttact || this.healthState !== HealthState.NORMAL){
+        if (!inputPad || this._weaponAttact || this.healthState !== HealthState.NORMAL){
             return;
         }
 
         let speed = 100;
 
-        const spaceDown = Phaser.Input.Keyboard.JustDown(cursor.space);
-
-        if (spaceDown){
+        if (inputPad.space){
             if (this._activeChest){
                 let coins = this._activeChest.coins;
 
                 if (coins > 0){
                     this._conis += coins;
+                    this._healthPoints = Math.min(100, this._healthPoints + 30);
                     sceneEvents.emit(EVENT_WARRIOR_OPEN_CHEST, this._conis);
                     this._activeChest = undefined;
                 }
@@ -107,28 +107,28 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
                 this.setWeaponAttact(true);
             }
         }
-        else if (cursor.up.isDown){
+        else if (inputPad.up){
             this.currDirection = Direction.UP;
             
             this.play('warrior-run-up', true);
 
             this.setVelocity(0, -speed);
         }
-        else if (cursor.down.isDown){
+        else if (inputPad.down){
             this.currDirection = Direction.DOWN;
             
             this.play('warrior-run-down', true);
             
             this.setVelocity(0, speed);
         }
-        else if (cursor.left.isDown){
+        else if (inputPad.left){
             this.currDirection = Direction.LEFT;
             
             this.play('warrior-run-left', true);
 
             this.setVelocity(-speed, 0);
         }
-        else if (cursor.right.isDown){
+        else if (inputPad.right){
             this.currDirection = Direction.RIGHT;
             
             
@@ -146,20 +146,20 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
             this.setVelocity(0, 0);
         }
 
-        // if (this._activeChest && (cursor.left.isDown || cursor.right.isDown ||
-        //     cursor.up.isDown || cursor.down.isDown)){
-        //         this._activeChest = undefined;
-        // }
+        if (this._activeChest && (inputPad.left || inputPad.right ||
+            inputPad.up || inputPad.down)){
+                this._activeChest = undefined;
+        }
     }
 
-    handleCollisionDamage(vetor: Phaser.Math.Vector2){
+    handleCollisionDamage(vetor: Phaser.Math.Vector2, damage: number = 0){
         if (this.healthState !== HealthState.NORMAL || this._healthPoints <= 0){
             return;
         }
 
         this.parentScene.sound.play('warrior_hurt');
 
-        this._healthPoints -= 20;
+        this._healthPoints -= damage;
 
         if (this._healthPoints <= 0){
             this.healthState = HealthState.DEAD;
@@ -172,7 +172,7 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
             this.setTint(0xff0000);
         }
 
-        this.parentScene.time.delayedCall(400, ()=>{
+        this.parentScene.time.delayedCall(200, ()=>{
             if (this.healthState === HealthState.DAMAGE){
                 this.healthState = HealthState.NORMAL;
                 this.clearTint();
@@ -182,6 +182,8 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
                 this.setVelocity(0, 0);
                 this._weaponInHand!.setVelocity(0, 0);
                 this.setActive(false);
+
+                sceneEvents.emit(EVENT_WARRIOR_DEAD);
             }
         });
     }
@@ -209,10 +211,11 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
 
         if (val){
 
+            this.setRotation(Math.PI * -0.25);
+            this._weaponInHand.setRotation(this.rotation);
 
-            bodySetting.offset.distanceX -= 2;
-            bodySetting.offset.distanceY -= 1;
             bodySetting.width += 6;
+            bodySetting.height += 4;
 
             switch(this.currDirection){
                 case Direction.LEFT:{
@@ -220,7 +223,7 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
                     this._weaponInHand.anims.play('weapon-left');
 
                     bodySetting.offset.x -= bodySetting.offset.distanceX;
-                    bodySetting.offset.y -= bodySetting.offset.distanceY;
+                    bodySetting.offset.y -= 2;
 
                     break;
                 }
@@ -229,16 +232,18 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
                     this._weaponInHand?.anims.play('weapon-right');
 
                     bodySetting.offset.x += bodySetting.offset.distanceX;
-                    bodySetting.offset.y += bodySetting.offset.distanceY;
+                    bodySetting.offset.y -= 2;
+
                     break;
                 }
                 case Direction.UP:{
                     this.anims.play('warrior-slash-up');
                     this._weaponInHand?.anims.play('weapon-up');
 
-                    bodySetting.offset.distanceX -= 3;
-
-                    bodySetting.offset.x += bodySetting.offset.distanceX;
+                    // swap body width and height
+                    [bodySetting.width, bodySetting.height] = [bodySetting.height, bodySetting.width];
+                    
+                    bodySetting.offset.x -= 6;
                     bodySetting.offset.y -= bodySetting.offset.distanceY;
 
                     break;
@@ -247,7 +252,10 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
                     this.anims.play('warrior-slash-down');
                     this._weaponInHand?.anims.play('weapon-down');
 
-                    bodySetting.offset.x -= bodySetting.offset.distanceX;
+                    // swap body width and height
+                    [bodySetting.width, bodySetting.height] = [bodySetting.height, bodySetting.width];
+                    
+                    bodySetting.offset.x -= 2;
                     bodySetting.offset.y += bodySetting.offset.distanceY;
 
                     break;
@@ -264,6 +272,10 @@ export default class Warrior extends Phaser.Physics.Arcade.Sprite{
             if (weaponFirstFrame){
                 this._weaponInHand?.anims.pause(weaponFirstFrame[0])
             }
+            
+            this.setRotation(0);
+            this._weaponInHand?.setRotation(this.rotation);
+            
             this.resetWeaponOffset();
         });
     }
